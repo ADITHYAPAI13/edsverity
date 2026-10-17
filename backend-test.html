@@ -7,8 +7,9 @@
   <title>EdsVerity Backend Test</title>
 </head>
 <body>
-  <h2>EdsVerity Backend Connection</h2>
-  <p id="result">Connecting...</p>
+  <h2>Optional Edge Function diagnostic</h2>
+  <p>This checks only the source-only health function, not database access or the optional Flask backend.</p>
+  <p id="result" role="status">Connecting...</p>
 
   <script>
     fetch("https://ixrvjjarpexyhzmqntjb.supabase.co/functions/v1/edsverity-api", {
@@ -22,7 +23,7 @@
     })
     .then(data => {
       document.getElementById("result").textContent =
-        data.message;
+        data.status === 'online' ? 'Edge Function responded: online. Database access is not checked.' : 'Unexpected health response.';
     })
     .catch(error => {
       document.getElementById("result").textContent =

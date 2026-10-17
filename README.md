@@ -10,17 +10,33 @@ This is the complete source based on the actual `edsverity-main.zip` repository 
 - **Supabase Edge Function:** `supabase/functions/edsverity-api/index.ts` is tracked as **source only**. GitHub Pages does not deploy it. Existing function can remain unchanged.
 - **`backend/`:** an earlier optional Flask API prototype preserved for reference. It is NOT deployed by GitHub Pages and isn't required for the current website.
 
-## Deployment steps
-1. **Back up** the current GitHub repository and (if important data exists) your Supabase database.
-2. Run `EDSVERITY_SUPABASE_MIGRATION.sql` from the outer downloaded ZIP in **Supabase SQL Editor** (not on GitHub Pages). It creates only additive fields/tables and replaces EdsVerity-specific policies/triggers. It should not delete user records.
-3. Upload the **contents of `UPLOAD_TO_GITHUB/`**, not that folder itself, to the root of `ADITHYAPAI13/edsverity` on branch `main`. The `.html` files belong in repo root, and all JavaScript/CSS/SVG files stay inside `static/`.
-4. GitHub Pages settings should remain `Deploy from a branch` → `main` → `/(root)`.
-5. When publishing completes, refresh the website and verify: sign in, dashboard, profile editing/photo, jobs, a test application, forum, directory visibility, and résumé print.
+## Development and review
 
-**Note:** GitHub's browser uploader sometimes cannot replace existing files in one drop; if it refuses or skips duplicates, use GitHub Desktop to synchronize the extracted full repository instead of deleting the project. Never upload credentials, `.env` or service-role keys.
+Use the existing checkout and a dedicated development branch. The site has no build
+step or frontend package installation:
+
+```sh
+python3 -m http.server 8000 --bind 127.0.0.1
+```
+
+Read [the technical audit](docs/TECHNICAL_AUDIT.md) and
+[the review/test guide](docs/REVIEW.md) for the first stability changes, validation,
+and unresolved live-database checks. Browser tests use an explicit test double;
+they never write production records.
+
+Submit changes through a pull request into `main`. Do not force-push or merge without
+owner approval. The documented GitHub Pages configuration is `Deploy from a branch`
+→ `main` → `/(root)`; pushing a development branch does not update that deployment.
+After an approved merge, check the Pages deployment and verify the live workflows.
+
+The database is managed separately. No SQL migration is required for the first
+stability branch. Existing setup SQL is under `supabase/` and in the repository root;
+do not blindly rerun it or assume it has been applied. Start with the read-only
+`supabase/VERIFY_ACCESS.sql` inventory before preparing any permissions migration.
+Never upload credentials, `.env` files or service-role keys.
 
 ## Honest feature status
-Live and database-backed: auth, dashboard content counts, profile edit/photo, projects, job posts/applications/statuses, discussions and replies, opt-in directory, printable résumé, member contribution counts and platform public-content totals.
+Implemented client workflows (live database behavior still requires verification): auth, dashboard content counts, profile edit/photo, projects, job posts/applications/statuses, discussions and replies, opt-in directory, printable résumé, member contribution counts and platform public-content totals.
 
 Not yet production-complete: organizations verification, messaging, mentor booking, marketplace transactions, formal certifications, verified scoring and leagues, abuse prevention/moderation tooling, notifications, audit logging, rate limits and comprehensive tests. Editorial pages (e.g. preparation) are navigation/resources, not full backend applications.
 
