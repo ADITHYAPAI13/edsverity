@@ -1,0 +1,33 @@
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>EdsVerity Backend Test</title>
+</head>
+<body>
+  <h2>EdsVerity Backend Connection</h2>
+  <p id="result">Connecting...</p>
+
+  <script>
+    fetch("https://ixrvjjarpexyhzmqntjb.supabase.co/functions/v1/edsverity-api", {
+      method: "GET"
+    })
+    .then(response => {
+      if (!response.ok) {
+        throw new Error("HTTP " + response.status);
+      }
+      return response.json();
+    })
+    .then(data => {
+      document.getElementById("result").textContent =
+        data.message;
+    })
+    .catch(error => {
+      document.getElementById("result").textContent =
+        "Connection failed: " + error.message;
+    });
+  </script>
+</body>
+</html>
