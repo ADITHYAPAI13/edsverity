@@ -2,8 +2,9 @@
 
 Audited starting commit: `dab0e93339a4d214068dc8bb683733801a41957e` on GitHub `main`.
 The existing checkout had no pending file changes. Remote Git read/fetch succeeded.
-Both GraphQL PR listing and REST PR listing returned `Forbidden`; pending PRs could
-not be inspected. This branch does not replace or merge any other branch.
+Initially both GraphQL and REST PR listing returned `Forbidden` at the network proxy.
+After allowing `api.github.com`, PR creation/listing succeeded. PR #1 is the only open
+PR and targets `main`; it is mergeable. This branch does not replace or merge another branch.
 
 ## Architecture and coverage
 
@@ -51,8 +52,12 @@ Inspected all 22 HTML documents, shared scripts/styles, both SQL setup files,
 ## Security findings and unresolved database verification
 
 Frontend checks are usability safeguards, not authorization. Supabase RLS must
-independently enforce every operation. **Live schema/policies were not inspected or
-changed**, and there are no new migrations in this branch.
+independently enforce every operation. **Live policies, grants and constraints were not inspected or changed**, and there
+are no new migrations in this branch. A final read-only API check returned HTTP 200
+for auth settings and zero-row queries selecting the expected frontend columns on
+profiles, jobs, projects, job_applications (including the jobs relationship),
+forum_threads and forum_replies. This confirms those API fields/relationships are
+available; it does not establish row isolation or authenticated write permissions.
 
 `supabase/EDSVERITY_SUPABASE_MIGRATION.sql` contains unique application constraints,
 no-self-application checks, employer-only status updates and an immutable-fields

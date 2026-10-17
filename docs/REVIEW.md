@@ -66,11 +66,16 @@ these results.
 
 ## Not tested against the live service
 
-Live Supabase schema, RLS, auth email confirmation, account-provider configuration,
-real storage writes, multi-user isolation and database persistence remain unverified.
-The environment proxy denied the Supabase host; Chromium also rejected the proxy
-certificate for the CDN. No certificate trust change was made. These restrictions
-are not evidence that the deployed website itself is broken.
+Final read-only checks returned HTTP 200 from Supabase auth settings and zero-row
+queries for the expected columns on all six tables (including the application/jobs
+relationship). The proxy initially blocked Supabase, but API connectivity is now
+confirmed. No records were fetched or modified by these checks.
+
+Live RLS, constraints/grants, auth email confirmation, real storage writes, multi-user
+isolation and authenticated persistence remain unverified. Chromium still rejected
+the CDN proxy certificate in a real-SDK smoke check; the new visible dependency-error
+state appeared as intended. No certificate trust change was made. This browser
+environment restriction is not evidence that the deployed website itself is broken.
 
 Use authorized test accounts for the live journeys after access is available. For
 profile privacy and ownership checks, see `TECHNICAL_AUDIT.md` and the read-only SQL
@@ -86,4 +91,7 @@ a migration. Future policy repairs should be separately reviewed.
 
 Merge only with the project owner's approval. An approved merge to the configured
 Pages branch requires a successful Pages deployment before the live site changes.
+PR: https://github.com/ADITHYAPAI13/edsverity/pull/1
+
+The development branch was pushed and PR #1 was created; it is open and mergeable.
 This task did not merge into `main`, deploy the website or modify Supabase records.
