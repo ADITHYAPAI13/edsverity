@@ -2,3 +2,17 @@
 /* Live data workspace */
 .live-note{padding:13px 16px;border:1px solid #dbe4dd;border-radius:9px;background:#f6faf7;margin:20px 0;color:#496258;font-size:14px}
 .live-form{display:grid;gap:14px;max-width:700px;margin:25px 0}.live-form label{font-size:13px;font-weight:700;display:grid;gap:7px}.live-form input,.live-form textarea,.live-form select{font:inherit;width:100%;border:1px solid #d8dfda;border-radius:8px;padding:12px 13px;color:#1e2c28;background:white}.live-form textarea{min-height:110px;resize:vertical}.live-form button,.live-action{border:0;border-radius:8px;background:#235a49;color:white;padding:12px 18px;font:inherit;font-weight:700;cursor:pointer;width:max-content;text-decoration:none}.live-form button:disabled{opacity:.6;cursor:wait}.live-muted{color:#66756f}.live-section{margin-top:34px}.live-stats{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:14px;margin:25px 0}.live-stat{border:1px solid #e1e6e2;border-radius:10px;padding:22px}.live-stat strong{font-size:30px;display:block;color:#183e32}.live-feed{display:grid;gap:12px;margin:16px 0}.live-item{border:1px solid #e0e6e2;border-radius:10px;padding:20px;background:white}.live-item h3{margin:4px 0 10px}.live-error{color:#9b302d}.live-good{color:#22674d}.live-topbar{display:flex;align-items:center;justify-content:space-between;gap:15px;flex-wrap:wrap}.live-hidden{display:none!important}@media(max-width:650px){.live-stats{grid-template-columns:1fr}.live-form{max-width:100%}}
+/* EdsVerity account and opportunity controls — consistent on every page */
+.account-pill{display:inline-flex;align-items:center;gap:8px;text-decoration:none;font-weight:600;font-size:13px;color:var(--heading,#1a2926);max-width:160px}
+.account-avatar,.avatar-preview{background:#e9f1ec;color:#185746;border:1px solid #cbded4;border-radius:50%;display:inline-flex;align-items:center;justify-content:center;position:relative;overflow:hidden;font-weight:700;flex:none}
+.account-avatar{height:34px;width:34px;font-size:11px}.account-avatar img,.avatar-preview img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover}
+.account-name{overflow:hidden;white-space:nowrap;text-overflow:ellipsis}
+.header-signout{border:0;background:transparent;font:inherit;font-size:13px;color:#527064;cursor:pointer}
+.avatar-editor{display:flex;align-items:center;gap:20px;border:1px solid #d8e4dd;border-radius:12px;padding:20px;margin:22px 0;background:#fafcfb}
+.avatar-preview{width:84px;height:84px;font-size:22px}.avatar-file-label{font-weight:700;display:block;margin-bottom:8px}.avatar-editor input{max-width:100%;font-size:13px}
+.dashboard-actions{display:flex;flex-wrap:wrap;gap:10px;margin:15px 0 30px}.dashboard-subhead{font-size:21px;margin:28px 0 12px}
+.apply-trigger,.delete-trigger{background:#1c5a45;color:white;border:0;padding:9px 15px;border-radius:7px;cursor:pointer;font-weight:600;margin-top:10px;margin-right:12px}
+.apply-trigger:disabled{opacity:.55;cursor:default}.delete-trigger{background:transparent;border:1px solid #c7d5cd;color:#8a3c35}
+.application-status{margin:12px 0 0 8px;padding:8px;border:1px solid #ccd7d1;border-radius:7px}
+[hidden]{display:none!important}
+@media(max-width:900px){.account-name,.header-signout{display:none}.avatar-editor{align-items:flex-start}.account-pill{margin-left:auto}}

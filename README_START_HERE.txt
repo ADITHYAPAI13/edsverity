@@ -1,13 +1,12 @@
-EDSVERITY LIVE DATA UPGRADE — OCTOBER 2026
+EDSVERITY CORE UPGRADE — OCT 2026
 
-1. Keep your backend/ folder and existing GitHub repository.
-2. Upload the replacement HTML files to repository root, and files from static/ into repository static/.
-3. Important: GitHub web uploads may not overwrite existing files automatically. If blocked, edit each file in GitHub or use GitHub Desktop.
-4. After GitHub Pages finishes, sign in at login.html. It redirects to dashboard.html.
-5. Edit profile on profile.html. Project and career pages read live Supabase records and allow authenticated posting.
+1. BACKUP your GitHub repository first.
+2. Supabase SQL Editor -> New Query -> paste SUPABASE_SETUP_RUN_ONCE.sql -> Run ONCE. Do not rerun this unmodified SQL: policies have fixed names.
+3. Upload/replace every .html file from this package in GitHub root.
+4. Upload/replace all files from static/ into repository static/ (including edsverity-session.js and edsverity-emblem.svg).
+5. DO NOT upload SQL, README, .env secrets, or alter your backend/ folder for GitHub Pages.
+6. Once published, sign in and test: dashboard; edit profile; upload JPG; post a project; post a job; apply from a second account; review application from the posting account.
 
-Uses the existing Supabase project and the three tables you created: public.profiles, public.projects, public.jobs. No migrations required for these basic operations.
+CURRENT FUNCTIONAL SCOPE: Supabase Auth, profile editing/avatar, live projects/jobs, applicant submission and owner review status, and dashboard. Other sitemap modules are NOT completed. The existing website pages for mentorship, news, forums, marketplace, etc are still not fully live-backed. Job listings are unverified community submissions and application notes are viewable by job poster. Do not use for sensitive employment info until moderation, server-side validation, privacy notices and secure communications are implemented.
 
-CURRENT LIMITATIONS: Other sections (forum, mentors, resumes, analytics, My Stars, etc.) are not connected to live data. Jobs are not employer-verified. Public-readable posts are visible to all; do not include personal or private information. RLS policies must remain enabled. No dedicated moderation or abuse prevention yet. Not production-ready.
-
-QA: test login -> dashboard, profile save -> refresh, publish project -> refresh, publish job -> refresh, sign out. See errors in browser console if a request fails. Do not publish secrets or service_role keys.
+IF ERRORS: Policies may already exist from previous scripts; do not blindly delete working tables. If Storage bucket already exists, inspect its public access and MIME limits. Under free service limits, deployment is not guaranteed always-on.
