@@ -17,7 +17,8 @@ async function showExistingSession() {
   if (session && !register) {
     form.hidden = true;
     signout.hidden = false;
-    update(`Signed in as ${session.user.email}. Profile/dashboard connection comes next.`);
+    update(`Signed in as ${session.user.email}. Opening dashboard…`);
+    location.href = new URL("dashboard.html", location.href).href;
   }
 }
 form.addEventListener("submit", async (event) => {
@@ -38,7 +39,7 @@ form.addEventListener("submit", async (event) => {
       });
       if (error) throw error;
       update(data.session
-        ? "Account created and signed in. Next we'll connect your EdsVerity profile."
+        ? "Account created and signed in. Open your dashboard."
         : "Registration submitted. Check your email for a confirmation link, then return to Sign in. If you already have an account, try signing in.");
       if (data.session) form.hidden = true;
     } else {
@@ -46,7 +47,8 @@ form.addEventListener("submit", async (event) => {
       if (error) throw error;
       form.hidden = true;
       signout.hidden = false;
-      update("Signed in successfully! Your account is working. The personal dashboard connection is our next step.");
+      update("Signed in successfully. Opening your dashboard…");
+      location.href = new URL("dashboard.html", location.href).href;
     }
   } catch (error) {
     update(error?.message || "Something went wrong. Please retry.");
