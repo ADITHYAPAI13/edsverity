@@ -1,66 +1,25 @@
-import { createClient } from "https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/+esm";
-
-// Public project details only. Never put secret/service-role keys here.
-const supabase = createClient(
-  "https://ixrvjjarpexyhzmqntjb.supabase.co",
-  "sb_publishable_FQnjqHl0SfbeC9bzVYeubA_T9Uf7Qeu"
-);
-const form = document.getElementById("auth-form");
-const status = document.getElementById("auth-status");
-const submit = document.getElementById("submit-button");
-const signout = document.getElementById("signout-button");
-const register = location.pathname.endsWith("register.html");
-const update = (message) => { status.textContent = message; };
-
-async function showExistingSession() {
-  const {data:{session}} = await supabase.auth.getSession();
-  if (session && !register) {
-    form.hidden = true;
-    signout.hidden = false;
-    update(`Signed in as ${session.user.email}. Opening dashboard…`);
-    location.href = new URL("dashboard.html", location.href).href;
+import {db,$,message} from './edsverity-client.js';
+const form=$('auth-form'), submit=$('submit-button'), signout=$('signout-button');
+const isRegister=location.pathname.endsWith('register.html');
+const nextFromQuery=new URLSearchParams(location.search).get('next');
+const next=(nextFromQuery && /^[a-z_]+\.html$/.test(nextFromQuery))?nextFromQuery:'dashboard.html';
+const goDashboard=()=>location.assign(new URL(next,location.href).href);
+async function checkCurrent(){const {data:{session}}=await db.auth.getSession();if(session&&!isRegister)goDashboard();}
+form?.addEventListener('submit',async event=>{
+ event.preventDefault();submit.disabled=true;message('auth-status','Please wait…');
+ try{
+  const email=$('email').value.trim(),password=$('password').value;
+  if(isRegister){
+   const full_name=$('fullname').value.trim();
+   const {data,error}=await db.auth.signUp({email,password,options:{data:{full_name},emailRedirectTo:new URL('login.html',location.href).href}});
+   if(error)throw error;
+   if(data.session){message('auth-status','Account created. Opening dashboard…');goDashboard();}
+   else message('auth-status','Check your inbox and confirm your email address, then sign in.');
+  }else{
+   const {error}=await db.auth.signInWithPassword({email,password});if(error)throw error;
+   message('auth-status','Signed in. Opening your dashboard…');goDashboard();
   }
-}
-form.addEventListener("submit", async (event) => {
-  event.preventDefault();
-  submit.disabled = true;
-  update("Please wait...");
-  try {
-    const email = document.getElementById("email").value.trim();
-    const password = document.getElementById("password").value;
-    if (register) {
-      const full_name = document.getElementById("fullname").value.trim();
-      const {data, error} = await supabase.auth.signUp({
-        email, password,
-        options: {
-          data: { full_name },
-          emailRedirectTo: new URL("login.html", location.href).href
-        }
-      });
-      if (error) throw error;
-      update(data.session
-        ? "Account created and signed in. Open your dashboard."
-        : "Registration submitted. Check your email for a confirmation link, then return to Sign in. If you already have an account, try signing in.");
-      if (data.session) form.hidden = true;
-    } else {
-      const {error} = await supabase.auth.signInWithPassword({email,password});
-      if (error) throw error;
-      form.hidden = true;
-      signout.hidden = false;
-      update("Signed in successfully. Opening your dashboard…");
-      location.href = new URL("dashboard.html", location.href).href;
-    }
-  } catch (error) {
-    update(error?.message || "Something went wrong. Please retry.");
-  } finally {
-    submit.disabled = false;
-  }
+ }catch(e){message('auth-status',e.message||'Unable to sign in.',true);}finally{submit.disabled=false;}
 });
-if (signout) signout.addEventListener("click", async () => {
-  const {error} = await supabase.auth.signOut();
-  if (error) return update(error.message);
-  form.hidden = false;
-  signout.hidden = true;
-  update("Signed out successfully.");
-});
-showExistingSession().catch(() => update("Couldn't check your session. Please refresh."));
+signout?.addEventListener('click',async()=>{const {error}=await db.auth.signOut();message('auth-status',error?error.message:'Signed out.',!!error);if(!error)location.assign('index.html');});
+checkCurrent().catch(()=>message('auth-status','Sign-in service temporarily unavailable.',true));

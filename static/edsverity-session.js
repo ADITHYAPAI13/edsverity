@@ -1,52 +1,23 @@
-import { createClient } from 'https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/+esm';
-const sb = createClient('https://ixrvjjarpexyhzmqntjb.supabase.co', 'sb_publishable_FQnjqHl0SfbeC9bzVYeubA_T9Uf7Qeu');
-const byId = id => document.getElementById(id);
-const initials = name => (name || 'EV').trim().split(/\s+/).slice(0,2).map(word => word.charAt(0).toUpperCase()).join('');
-const pill = byId('account-pill');
-const avatar = byId('nav-avatar');
-function setAvatar(container, url, fullName) {
-  if (!container) return;
-  container.textContent = initials(fullName);
-  if (url && url.startsWith('https://')) {
-    const img = document.createElement('img');
-    img.src = url; img.alt = ''; img.loading = 'lazy';
-    img.addEventListener('error', () => img.remove(), {once:true});
-    container.appendChild(img);
-  }
+import {db,$,showAvatar} from './edsverity-client.js';
+const guestEls=document.querySelectorAll('[data-guest-only]');
+const memberEls=document.querySelectorAll('[data-member-only]');
+function showGuest(){guestEls.forEach(n=>n.hidden=false);memberEls.forEach(n=>n.hidden=true);if($('account-pill'))$('account-pill').hidden=true;}
+async function showMember(user){
+ let name=user.user_metadata?.full_name?.trim()||user.email?.split('@')[0]||'Member',avatar='';
+ const {data}=await db.from('profiles').select('full_name,avatar_url').eq('id',user.id).maybeSingle();
+ if(data){name=data.full_name?.trim()||name;avatar=data.avatar_url||'';}
+ guestEls.forEach(n=>n.hidden=true);memberEls.forEach(n=>n.hidden=false);
+ if($('account-pill'))$('account-pill').hidden=false;
+ if($('nav-name'))$('nav-name').textContent=name.split(/\s+/)[0];
+ if($('mobile-account-name'))$('mobile-account-name').textContent=name;
+ showAvatar($('nav-avatar'),avatar,name);showAvatar($('home-proof-avatar'),avatar,name);
+ if($('home-proof-title'))$('home-proof-title').textContent=name+'’s EdsVerity profile';
+ if($('home-proof-subtitle'))$('home-proof-subtitle').textContent='Your projects, interests and next steps in one place.';
+ if($('home-proof-note'))$('home-proof-note').textContent='This account is linked to your profile and contributions.';
 }
-function setGuest(isGuest) {
-  document.querySelectorAll('[data-guest-only]').forEach(e => e.hidden = !isGuest);
-  document.querySelectorAll('[data-member-only]').forEach(e => e.hidden = isGuest);
-  if (pill) pill.hidden = isGuest;
-}
-async function showAccount(user) {
-  let fullName = user.user_metadata?.full_name?.trim() || user.email?.split('@')[0] || 'Member';
-  let photo = '';
-  const {data, error} = await sb.from('profiles').select('full_name,avatar_url').eq('id',user.id).maybeSingle();
-  if (!error && data) {
-    fullName = data.full_name?.trim() || fullName;
-    photo = data.avatar_url || '';
-  }
-  setGuest(false);
-  if (byId('nav-name')) byId('nav-name').textContent = fullName.split(/\s+/)[0];
-  if (byId('mobile-account-name')) byId('mobile-account-name').textContent = fullName;
-  setAvatar(avatar, photo, fullName);
-  if (byId('home-proof-avatar')) setAvatar(byId('home-proof-avatar'), photo, fullName);
-  if (byId('home-proof-title')) byId('home-proof-title').textContent = fullName + '’s EdsVerity profile';
-  if (byId('home-proof-subtitle')) byId('home-proof-subtitle').textContent = 'Your work, projects and interests in one place.';
-  if (byId('home-proof-note')) byId('home-proof-note').textContent = 'Your profile is linked to your signed-in account.';
-}
-async function signOut() { await sb.auth.signOut(); window.location.href='index.html'; }
-byId('global-signout')?.addEventListener('click',signOut);
-byId('mobile-signout')?.addEventListener('click',signOut);
-window.addEventListener('edsverity:avatar-updated', e => {
-  setAvatar(avatar,e.detail?.url,e.detail?.full_name);
-  setAvatar(byId('home-proof-avatar'),e.detail?.url,e.detail?.full_name);
-});
-window.addEventListener('edsverity:profile-updated', e => {
-  if (byId('nav-name')) byId('nav-name').textContent = (e.detail?.full_name || 'Member').split(/\s+/)[0];
-});
-try {
-  const {data:{user}} = await sb.auth.getUser();
-  if (user) await showAccount(user); else setGuest(true);
-} catch (e) { setGuest(true); }
+async function signOut(){await db.auth.signOut();location.assign('index.html');}
+$('global-signout')?.addEventListener('click',signOut);
+$('mobile-signout')?.addEventListener('click',signOut);
+window.addEventListener('edsverity:profile-updated',e=>{if($('nav-name'))$('nav-name').textContent=(e.detail?.full_name||'Member').split(/\s+/)[0];});
+window.addEventListener('edsverity:avatar-updated',e=>{showAvatar($('nav-avatar'),e.detail?.url,e.detail?.full_name);showAvatar($('home-proof-avatar'),e.detail?.url,e.detail?.full_name);});
+try{const {data:{user}}=await db.auth.getUser();if(user)await showMember(user);else showGuest();}catch{showGuest();}
