@@ -1,8 +1,19 @@
-import {db,$,escapeHTML as esc,dateText as date,showAvatar,message,authUser,ownProfile,records,helpfulError} from './edsverity-client.js';
+import {applicationDialog} from './edsverity-application.js';
+import {db,$,escapeHTML as esc,dateText as date,showAvatar,message,authUser,ownProfile,records,helpfulError,signOut} from './edsverity-client.js';
 
 const item = (title,meta,description) => `<article class="live-item"><p class="live-muted">${esc(meta)}</p><h3>${esc(title)}</h3><p class="linebreak">${esc(description)}</p></article>`;
 const empty = text => `<p class="empty-state">${esc(text)}</p>`;
 const count = async(table,filter) => {let q=db.from(table).select('id',{count:'exact',head:true});if(filter)q=q.eq(filter[0],filter[1]);const {count,error}=await q;if(error)throw error;return count??0;};
+
+// Restore controls on both returned database errors and thrown network failures.
+async function saveAction(button,status,task,success){
+ if(button.disabled)return;
+ button.disabled=true;message(status,'Saving…');
+ try{await task();if(success)message(status,success);}
+ catch(error){message(status,helpfulError(error),true);}
+ finally{button.disabled=false;}
+}
+function requireResult(result){if(result.error)throw result.error;return result.data;}
 
 async function profilePage(){
  const u=await authUser(true),p=await ownProfile(u);
@@ -10,27 +21,33 @@ async function profilePage(){
  for(const field of ['full_name','headline','bio','college','skills'])$(field).value=p[field]||'';
  $('discoverable').checked=!!p.discoverable;
  showAvatar($('avatar-preview'),p.avatar_url,p.full_name||u.user_metadata?.full_name);
- $('profile-form').addEventListener('submit',async e=>{
-  e.preventDefault();const btn=$('save-profile');btn.disabled=true;message('profile-message','Saving…');
+ $('profile-form').addEventListener('submit',e=>{
+  e.preventDefault();
   const value={id:u.id,discoverable:$('discoverable').checked};
   for(const field of ['full_name','headline','bio','college','skills'])value[field]=$(field).value.trim();
-  const {error}=await db.from('profiles').upsert(value,{onConflict:'id'});
-  message('profile-message',error?helpfulError(error):'Saved. Your profile is up to date.',!!error);
-  if(!error){showAvatar($('avatar-preview'),p.avatar_url,value.full_name);window.dispatchEvent(new CustomEvent('edsverity:profile-updated',{detail:{full_name:value.full_name}}));}
-  btn.disabled=false;
+  if(!value.full_name){message('profile-message','Enter your full name.',true);return;}
+  saveAction($('save-profile'),'profile-message',async()=>{
+   requireResult(await db.from('profiles').upsert(value,{onConflict:'id'}));
+   Object.assign(p,value);
+   showAvatar($('avatar-preview'),p.avatar_url,value.full_name);
+   window.dispatchEvent(new CustomEvent('edsverity:profile-updated',{detail:{full_name:value.full_name}}));
+  },'Saved. Your profile is up to date.');
  });
- $('avatar-file').addEventListener('change',async e=>{
-  const f=e.target.files?.[0];if(!f)return;
-  if(!['image/jpeg','image/png','image/webp'].includes(f.type)||f.size>2*1024*1024){message('avatar-message','Select a JPG, PNG or WebP under 2 MB.',true);return;}
-  message('avatar-message','Uploading photo…');
-  const ext={'image/jpeg':'jpg','image/png':'png','image/webp':'webp'}[f.type];
-  const path=`${u.id}/profile.${ext}`;
-  const {error:upErr}=await db.storage.from('avatars').upload(path,f,{contentType:f.type,upsert:true});
-  if(upErr){message('avatar-message',helpfulError(upErr),true);return;}
-  const url=db.storage.from('avatars').getPublicUrl(path).data.publicUrl+'?v='+Date.now();
-  const {error}=await db.from('profiles').upsert({id:u.id,avatar_url:url},{onConflict:'id'});
-  message('avatar-message',error?helpfulError(error):'Photo saved successfully.',!!error);
-  if(!error){p.avatar_url=url;const name=$('full_name').value;showAvatar($('avatar-preview'),url,name);window.dispatchEvent(new CustomEvent('edsverity:avatar-updated',{detail:{url,full_name:name}}));}
+ $('avatar-file').addEventListener('change',e=>{
+  const input=e.currentTarget,f=input.files?.[0];if(!f)return;
+  if(!['image/jpeg','image/png','image/webp'].includes(f.type)||f.size===0||f.size>2*1024*1024){message('avatar-message','Select a nonempty JPG, PNG or WebP up to 2 MB.',true);input.value='';return;}
+  saveAction(input,'avatar-message',async()=>{
+   // Decode before upload: a renamed non-image must not pass the MIME check alone.
+   const bitmap=await createImageBitmap(f);bitmap.close();
+   const ext={'image/jpeg':'jpg','image/png':'png','image/webp':'webp'}[f.type];
+   const path=`${u.id}/profile.${ext}`;
+   requireResult(await db.storage.from('avatars').upload(path,f,{contentType:f.type,upsert:true}));
+   const url=db.storage.from('avatars').getPublicUrl(path).data.publicUrl+'?v='+Date.now();
+   requireResult(await db.from('profiles').upsert({id:u.id,avatar_url:url},{onConflict:'id'}));
+   p.avatar_url=url;const name=p.full_name||u.user_metadata?.full_name;
+   showAvatar($('avatar-preview'),url,name);
+   window.dispatchEvent(new CustomEvent('edsverity:avatar-updated',{detail:{url,full_name:name}}));
+  },'Photo saved successfully.').finally(()=>{input.value='';});
  });
 }
 
@@ -54,13 +71,21 @@ async function applicationPanels(u){
  const names=new Map((profiles||[]).map(p=>[p.id,p]));
  received.innerHTML=data.map(a=>{
   const p=names.get(a.applicant_id),name=p?.full_name||`Applicant ${a.applicant_id.slice(0,8)}`;
-  return `<article class="live-item"><p class="live-muted">${esc(jobs.find(j=>j.id===a.job_id)?.title||'Opportunity')} · ${date(a.created_at)}</p><h3>${esc(name)}</h3>${p?.headline?`<p>${esc(p.headline)}</p>`:''}<p class="linebreak">${esc(a.cover_note)}</p><label class="review-label">Application status <select class="review-status" data-id="${esc(a.id)}"><option value="submitted" ${a.status==='submitted'?'selected':''}>Submitted</option><option value="reviewing" ${a.status==='reviewing'?'selected':''}>Reviewing</option><option value="shortlisted" ${a.status==='shortlisted'?'selected':''}>Shortlisted</option><option value="rejected" ${a.status==='rejected'?'selected':''}>Not selected</option></select></label><span class="review-feedback" role="status"></span></article>`;
+  return `<article class="live-item"><p class="live-muted">${esc(jobs.find(j=>j.id===a.job_id)?.title||'Opportunity')} · ${date(a.created_at)}</p><h3>${esc(name)}</h3>${p?.headline?`<p>${esc(p.headline)}</p>`:''}<p class="linebreak">${esc(a.cover_note)}</p><label class="review-label">Application status <select class="review-status" data-id="${esc(a.id)}"><option value="submitted" ${a.status==='submitted'?'selected':''}>Submitted</option><option value="reviewing" ${a.status==='reviewing'?'selected':''}>Reviewing</option><option value="shortlisted" ${a.status==='shortlisted'?'selected':''}>Shortlisted</option><option value="rejected" ${a.status==='rejected'?'selected':''}>Rejected</option></select></label><span class="review-feedback" role="status"></span></article>`;
  }).join('');
- received.querySelectorAll('.review-status').forEach(select=>select.addEventListener('change',async()=>{
-  const msg=select.closest('.live-item').querySelector('.review-feedback');msg.textContent='Saving…';
-  const {error}=await db.from('job_applications').update({status:select.value}).eq('id',select.dataset.id);
-  msg.textContent=error?helpfulError(error):'Saved';if(error)msg.classList.add('live-error');
- }));
+ received.querySelectorAll('.review-status').forEach(select=>{
+  let saved=select.value;
+  select.addEventListener('change',async()=>{
+   const msg=select.closest('.live-item').querySelector('.review-feedback');
+   const requested=select.value;select.disabled=true;msg.classList.remove('live-error');msg.textContent='Saving…';
+   try{
+    const rows=requireResult(await db.from('job_applications').update({status:requested}).eq('id',select.dataset.id).select('id'));
+    if(!rows?.length)throw new Error('This application could not be updated. Refresh to check your access.');
+    saved=requested;msg.textContent='Saved';
+   }catch(error){select.value=saved;msg.textContent=helpfulError(error);msg.classList.add('live-error');}
+   finally{select.disabled=false;}
+  });
+ });
 }
 
 async function dashboardPage(){
@@ -68,13 +93,14 @@ async function dashboardPage(){
  $('account-name').textContent=p.full_name||u.user_metadata?.full_name||'Member';$('account-email').textContent=u.email;
  $('dashboard-joined').textContent=`Member since ${date(u.created_at)}`;
  showAvatar($('dashboard-avatar'),p.avatar_url,p.full_name||u.user_metadata?.full_name);
+ const panels=applicationPanels(u).catch(error=>{message('page-message',helpfulError(error),true);});
  const [mine,posted,all,projects,jobs]=await Promise.all([
   count('projects',['owner_id',u.id]),count('jobs',['posted_by',u.id]),count('projects'),records('projects',4),records('jobs',4)
  ]);
  $('my-project-count').textContent=mine;$('my-job-count').textContent=posted;$('all-project-count').textContent=all;
  $('latest-projects').innerHTML=projects.length?projects.map(r=>item(r.title,r.category||'Project',r.description)).join(''):empty('No projects have been posted yet.');
  $('latest-jobs').innerHTML=jobs.length?jobs.map(r=>item(r.title,[r.company,r.job_type].filter(Boolean).join(' · '),r.description)).join(''):empty('No opportunities have been posted yet.');
- await applicationPanels(u);
+ await panels;
 }
 
 async function listingsPage(type){
@@ -82,6 +108,7 @@ async function listingsPage(type){
  const u=await authUser(false);let data=[],applied=new Set();
  if(u){$('publish-guest')?.classList.add('live-hidden');$('publish-form')?.classList.remove('live-hidden');}
  const feed=$('live-records'),search=$('live-search');
+ const openApplication=type==='jobs'?applicationDialog(u,(id,text)=>{applied.add(id);render();message('list-message',text);}):null;
  async function refresh(){
   try{data=await records(table);
    if(u&&type==='jobs'){
@@ -98,18 +125,13 @@ async function listingsPage(type){
   }).join(''):empty(term?'No matching records. Try another search.':'Nothing posted yet. Be the first to share something useful.');
   feed.querySelectorAll('.delete-trigger').forEach(btn=>btn.addEventListener('click',async()=>{
    if(!confirm('Remove this listing permanently?'))return;
-   const {error}=await db.from(table).delete().eq('id',btn.dataset.id);
-   if(error)message('list-message',helpfulError(error),true);else refresh();
+   await saveAction(btn,'list-message',async()=>{
+    const rows=requireResult(await db.from(table).delete().eq('id',btn.dataset.id).eq(owner,u.id).select('id'));
+    if(!rows?.length)throw new Error('This listing could not be removed. Refresh to check your access.');
+    await refresh();
+   });
   }));
-  feed.querySelectorAll('.apply-trigger').forEach(btn=>btn.addEventListener('click',()=>apply(btn.dataset.id)));
- }
- async function apply(job_id){
-  if(!u){location.assign('login.html?next=careers.html');return;}
-  const note=prompt('Briefly describe your relevant experience and interest (10–2000 characters):');
-  if(note===null)return;if(note.trim().length<10||note.trim().length>2000){message('list-message','Application note must be 10–2000 characters.',true);return;}
-  const {error}=await db.from('job_applications').insert({job_id,applicant_id:u.id,cover_note:note.trim()});
-  if(error){message('list-message',helpfulError(error),true);return;}
-  applied.add(job_id);message('list-message','Your application was submitted. Track it on your dashboard.');render();
+  feed.querySelectorAll('.apply-trigger').forEach(btn=>btn.addEventListener('click',()=>{const job=data.find(r=>r.id===btn.dataset.id);if(job&&!applied.has(job.id))openApplication(job,btn);}));
  }
  search?.addEventListener('input',render);
  $('publish-form')?.addEventListener('submit',async e=>{
@@ -119,15 +141,16 @@ async function listingsPage(type){
   if(type==='jobs')for(const k of ['company','location','job_type','application_instructions'])payload[k]=v(k);
   else for(const k of ['category','skills_required'])payload[k]=v(k);
   if(payload.title.length<3||payload.description.length<10){message('publish-message','Add a descriptive title and at least 10 characters of detail.',true);return;}
-  btn.disabled=true;message('publish-message','Publishing…');
-  const {error}=await db.from(table).insert(payload);
-  message('publish-message',error?helpfulError(error):'Published successfully.',!!error);
-  if(!error){f.reset();await refresh();}btn.disabled=false;
+  if(type==='jobs'&&!payload.company){message('publish-message','Enter a company or organization.',true);return;}
+  await saveAction(btn,'publish-message',async()=>{
+   requireResult(await db.from(table).insert(payload));
+   f.reset();await refresh();
+  },'Published successfully.');
  });
  if(type==='jobs'&&$('jobs-workspace'))$('jobs-workspace').innerHTML=u?'<a href="dashboard.html">Open your dashboard to see applications and review applicants →</a>':'<a href="login.html?next=careers.html">Sign in to track applications →</a>';
  await refresh();
  // Recheck listings when returning to the tab; changes are saved immediately in Supabase.
- document.addEventListener('visibilitychange',()=>{if(!document.hidden)refresh();});
+ document.addEventListener('visibilitychange',()=>{if(!document.hidden&&!$('application-dialog')?.open)refresh();});
 }
 
 async function forumPage(){
@@ -137,18 +160,34 @@ async function forumPage(){
  function render(){const q=(search.value||'').toLowerCase();const visible=threads.filter(t=>[t.title,t.body,t.category].join(' ').toLowerCase().includes(q));
  feed.innerHTML=visible.length?visible.map(t=>`<article class="live-item discussion"><p class="live-muted">${esc(t.category)} · ${date(t.created_at)}</p><h3>${esc(t.title)}</h3><p class="linebreak">${esc(t.body)}</p><div class="card-actions"><button class="view-replies" data-id="${esc(t.id)}">View replies</button>${u?.id===t.author_id?`<button class="delete-thread delete-trigger" data-id="${esc(t.id)}">Delete my discussion</button>`:''}</div><div class="replies live-hidden" id="replies-${esc(t.id)}"></div></article>`).join(''):empty('No discussions yet. Start the first conversation.');
  feed.querySelectorAll('.view-replies').forEach(b=>b.addEventListener('click',()=>loadReplies(b.dataset.id)));
- feed.querySelectorAll('.delete-thread').forEach(b=>b.addEventListener('click',async()=>{if(!confirm('Delete this discussion and replies?'))return;const {error}=await db.from('forum_threads').delete().eq('id',b.dataset.id);if(error)message('page-message',helpfulError(error),true);else refresh()}));
+ feed.querySelectorAll('.delete-thread').forEach(b=>b.addEventListener('click',async()=>{if(!confirm('Delete this discussion and replies?'))return;await saveAction(b,'page-message',async()=>{const rows=requireResult(await db.from('forum_threads').delete().eq('id',b.dataset.id).eq('author_id',u.id).select('id'));if(!rows?.length)throw new Error('This discussion could not be removed. Refresh to check your access.');await refresh();})}));
  }
  async function loadReplies(id){const box=$('replies-'+id);if(!box)return;
   box.classList.remove('live-hidden');box.textContent='Loading replies…';
+  try {
   const {data,error}=await db.from('forum_replies').select('id,author_id,body,created_at').eq('thread_id',id).order('created_at',{ascending:true});
   if(error){box.textContent=helpfulError(error);return;}
   box.innerHTML=`<h4>Replies</h4>${data?.length?data.map(r=>`<div class="reply"><small>${date(r.created_at)}</small><p class="linebreak">${esc(r.body)}</p></div>`).join(''):empty('No replies yet.')}${u?`<form class="reply-form"><label>Your reply<textarea name="body" maxlength="3000" minlength="2" required></textarea></label><button type="submit">Post reply</button><p role="status" class="reply-status"></p></form>`:'<p><a href="login.html?next=forum.html">Sign in to reply →</a></p>'}`;
-  box.querySelector('form')?.addEventListener('submit',async e=>{e.preventDefault();const f=e.currentTarget,body=f.elements.namedItem('body').value.trim();if(body.length<2)return;const {error}=await db.from('forum_replies').insert({thread_id:id,author_id:u.id,body});if(error)f.querySelector('.reply-status').textContent=helpfulError(error);else loadReplies(id);});
+  box.querySelector('form')?.addEventListener('submit',async e=>{
+   e.preventDefault();const f=e.currentTarget,body=f.elements.namedItem('body').value.trim();
+   const status=f.querySelector('.reply-status');status.id=`reply-status-${id}`;
+   if(body.length<2||body.length>3000){message(status.id,'Write a reply between 2 and 3000 characters.',true);return;}
+   await saveAction(f.querySelector('button'),status.id,async()=>{
+    requireResult(await db.from('forum_replies').insert({thread_id:id,author_id:u.id,body}));await loadReplies(id);
+   });
+  });
+  }catch(error){box.textContent=helpfulError(error);}
  }
  search.addEventListener('input',render);
- $('thread-form')?.addEventListener('submit',async e=>{e.preventDefault();if(!u)return;const f=e.currentTarget, v=n=>f.elements.namedItem(n).value.trim();const btn=$('thread-submit');btn.disabled=true;const {error}=await db.from('forum_threads').insert({author_id:u.id,title:v('title'),category:v('category'),body:v('body')});message('thread-message',error?helpfulError(error):'Discussion published.',!!error);if(!error){f.reset();await refresh();}btn.disabled=false;});
- await refresh();document.addEventListener('visibilitychange',()=>{if(!document.hidden)refresh();});
+ $('thread-form')?.addEventListener('submit',async e=>{
+  e.preventDefault();if(!u)return;const f=e.currentTarget,v=n=>f.elements.namedItem(n).value.trim();
+  const payload={author_id:u.id,title:v('title'),category:v('category'),body:v('body')};
+  if(payload.title.length<8||payload.body.length<10){message('thread-message','Add a title of at least 8 characters and context of at least 10 characters.',true);return;}
+  await saveAction($('thread-submit'),'thread-message',async()=>{
+   requireResult(await db.from('forum_threads').insert(payload));f.reset();await refresh();
+  },'Discussion published.');
+ });
+ await refresh();document.addEventListener('visibilitychange',()=>{if(!document.hidden&&!$('application-dialog')?.open)refresh();});
 }
 
 async function networkPage(){const feed=$('members-feed'),search=$('members-search');let people=[];
@@ -162,12 +201,16 @@ async function resumePage(){const u=await authUser(true),p=await ownProfile(u),d
  $('resume-document').innerHTML=`<h2>${esc(name)}</h2><p>${esc(p.headline||'Independent learner and builder')}</p><p>${esc(u.email||'')}</p>${p.college?`<h3>Education / Organization</h3><p>${esc(p.college)}</p>`:''}${p.bio?`<h3>About</h3><p class="linebreak">${esc(p.bio)}</p>`:''}${p.skills?`<h3>Skills</h3><p>${esc(p.skills)}</p>`:''}<h3>Selected projects</h3>${data.data?.length?data.data.map(j=>`<div class="resume-project"><strong>${esc(j.title)}</strong><small> · ${date(j.created_at)}</small><p class="linebreak">${esc(j.description)}</p></div>`).join(''):empty('No projects published yet. Add one to strengthen your résumé.')}`;
  $('print-resume').addEventListener('click',()=>window.print());
 }
-async function settingsPage(){const u=await authUser(true),p=await ownProfile(u);$('settings-email').textContent=u.email||'—';$('settings-discoverable').checked=!!p.discoverable;
- $('settings-save').addEventListener('click',async()=>{const {error}=await db.from('profiles').upsert({id:u.id,discoverable:$('settings-discoverable').checked},{onConflict:'id'});message('settings-message',error?helpfulError(error):'Preference saved.',!!error);});
- $('settings-signout').addEventListener('click',async()=>{await db.auth.signOut();location.assign('index.html');});
+async function settingsPage(){
+ const u=await authUser(true),p=await ownProfile(u);
+ $('settings-email').textContent=u.email||'—';$('settings-discoverable').checked=!!p.discoverable;
+ $('settings-save').addEventListener('click',()=>saveAction($('settings-save'),'settings-message',async()=>{
+  requireResult(await db.from('profiles').upsert({id:u.id,discoverable:$('settings-discoverable').checked},{onConflict:'id'}));
+ },'Preference saved.'));
+ $('settings-signout').addEventListener('click',event=>signOut(event.currentTarget));
 }
 async function starsPage(){const u=await authUser(true);const [p,t,a]=await Promise.all([count('projects',['owner_id',u.id]),count('forum_threads',['author_id',u.id]),count('job_applications',['applicant_id',u.id])]);$('stars-projects').textContent=p;$('stars-threads').textContent=t;$('stars-applications').textContent=a;}
 async function analyticsPage(){const [p,j,t]=await Promise.all([count('projects'),count('jobs'),count('forum_threads')]);$('analytics-projects').textContent=p;$('analytics-jobs').textContent=j;$('analytics-threads').textContent=t;}
 const start={dashboard:dashboardPage,profile:profilePage,jobs:()=>listingsPage('jobs'),projects:()=>listingsPage('projects'),forum:forumPage,networking:networkPage,resume:resumePage,settings:settingsPage,mystars:starsPage,analytics_growth:analyticsPage};
 const current=document.body.dataset.livePage;
-if(start[current])start[current]().catch(error=>message('page-message',helpfulError(error),true));
+if(start[current])await start[current]();

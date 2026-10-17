@@ -1,0 +1,4 @@
+# Local Python test artifacts (the existing tracked prototype bytecode is untouched).
+__pycache__/
+*.py[cod]
+.venv/
